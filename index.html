@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shark’s Cup · FC Mobile Tournament</title>
+<title>Shark’s Cup · eFootball & FC Mobile Tournament</title>
 <link rel="icon" href="logo.jpg">
 <meta property="og:image" content="logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,7 +41,7 @@ section:nth-of-type(even){background:linear-gradient(var(--deep),var(--abyss))}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:36px}
 form{display:grid;gap:14px;background:var(--deep);border:1px solid var(--line);padding:24px;border-radius:14px}
 label{font-weight:600;display:grid;gap:6px}
-input{font:inherit;padding:12px 14px;border-radius:8px;border:1px solid var(--line);background:var(--abyss);color:var(--foam)}
+input,select{font:inherit;padding:12px 14px;border-radius:8px;border:1px solid var(--line);background:var(--abyss);color:var(--foam)}
 .note{color:var(--mute)}
 .err{color:#ff8a8a;min-height:1.4em;margin:0}
 .fee{font:800 56px/1 "Barlow Condensed",Impact,sans-serif;font-style:italic;color:var(--gold)}
@@ -96,6 +96,7 @@ footer{padding:36px 20px;text-align:center;color:var(--mute)}
     <p class="note" id="spots"></p>
   </div>
   <form id="form" novalidate>
+    <label>Game<select id="game"></select></label>
     <label>Your username<input id="user" autocomplete="off" required maxlength="30" placeholder="The name you play with"></label>
     <label>Your WhatsApp number<input id="phone" inputmode="tel" required placeholder="e.g. 231 77 000 0000"></label>
     <p class="err" id="err" role="alert"></p>
@@ -128,25 +129,26 @@ $("#facts").innerHTML=[["Game",C.game],["When",C.date],["Where",C.venue],["Entry
 $("#nav").innerHTML='<img src="logo.jpg" alt="">'+[["register","Register"],["players","Players"],["bracket","Fixtures"],["rules","Rules"]]
   .map(l=>`<a href="#${l[0]}">${l[1]}</a>`).join("");
 $("#fee").textContent=C.entryFee;
+$("#game").innerHTML=(C.games||[C.game]).map(g=>`<option>${esc(g)}</option>`).join("");
 $("#pay").textContent=C.paymentInfo;
 $("#rulelist").innerHTML=C.rules.map(r=>`<li>${esc(r)}</li>`).join("");
 $("#foot").textContent="© "+new Date().getFullYear()+" "+C.name;
 
 /* Players */
 const taken=C.players.length;
-$("#plist").innerHTML=C.players.length?C.players.map(p=>`<li><span>${esc(p.name)}</span><span class="${p.paid?"paid":"wait"}">${p.paid?"✓ Confirmed":"Awaiting payment"}</span></li>`).join(""):'<li class="note">No players yet. Be the first to register.</li>';
-$("#spots").textContent=C.maxPlayers?`${Math.max(C.maxPlayers-taken,0)} of ${C.maxPlayers} spots left.`:"";
+$("#plist").innerHTML=C.players.length?C.players.map(p=>`<li><span>${esc(p.name)}${p.game?` <small class="wait">· ${esc(p.game)}</small>`:""}</span><span class="${p.paid?"paid":"wait"}">${p.paid?"✓ Confirmed":"Awaiting payment"}</span></li>`).join(""):'<li class="note">No players yet. Be the first to register.</li>';
+$("#spots").textContent=C.maxPlayers?(C.games||[C.game]).map(g=>`${g}: ${Math.max(C.maxPlayers-C.players.filter(p=>p.game===g).length,0)} of ${C.maxPlayers} spots left`).join(" · "):"";
 
 /* Registration → WhatsApp */
 if(!C.registrationOpen){$("#form").innerHTML="<h3>Registration is closed</h3><p class='note'>Follow the fixtures below.</p>";$("#cta").style.display="none"}
 $("#form").addEventListener("submit",e=>{
   e.preventDefault();
-  const u=$("#user").value.trim(),p=$("#phone").value.trim(),err=$("#err");
+  const game=$("#game").value,u=$("#user").value.trim(),p=$("#phone").value.trim(),err=$("#err");
   if(u.length<2){err.textContent="Enter your username (at least 2 characters).";return}
   if(p.replace(/\D/g,"").length<7){err.textContent="Enter a valid WhatsApp number.";return}
-  if(C.players.some(x=>x.name.toLowerCase()===u.toLowerCase())){err.textContent="That username is already registered. Pick another.";return}
+  if(C.players.some(x=>(x.game||game)===game&&x.name.toLowerCase()===u.toLowerCase())){err.textContent="That username is already registered for "+game+". Pick another.";return}
   err.textContent="";
-  const msg=`${C.name} registration (${C.tournamentType||C.game})\nUsername: ${u}\nMy WhatsApp: ${p}\nEntry fee: ${C.entryFee}\nI am sending my payment now.`;
+  const msg=`${C.name} registration\nGame: ${game}\nUsername: ${u}\nMy WhatsApp: ${p}\nEntry fee: ${C.entryFee}\nI am sending my payment now.`;
   window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`,"_blank","noopener");
 });
 

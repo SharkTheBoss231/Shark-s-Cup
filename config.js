@@ -4,13 +4,14 @@
 window.CUP = {
   name: "Shark’s Cup",
   tagline: "Play. Compete. Win.",
-  game: "FC Mobile",
-  tournamentType: "FC Mobile Tournament",
+  game: "eFootball & FC Mobile",
+  tournamentType: "eFootball & FC Mobile Tournament",
+  games: ["eFootball", "FC Mobile"],   // players pick one when registering
   date: "To be announced",
   venue: "Monrovia",
   entryFee: "$500 LD",
   prize: "To be announced",
-  maxPlayers: 32,
+  maxPlayers: 32,                   // spots per game
   registrationOpen: true,
 
   // YOUR WhatsApp number for payment confirmation.
@@ -23,7 +24,7 @@ window.CUP = {
   points: { win: 3, draw: 1, loss: 0 },
 
   rules: [
-    "This is an FC Mobile tournament. All matches are played on FC Mobile.",
+    "This tournament has two competitions: eFootball and FC Mobile. Register for the game you will play.",
     "Entry fee is $500 LD, paid before the tournament starts.",
     "Each player registers one username. Use the same name you play with.",
     "Be ready at your scheduled time. A no-show can lose the match.",

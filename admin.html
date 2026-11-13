@@ -19,6 +19,7 @@ input,select{font:inherit;padding:9px 11px;border-radius:8px;border:1px solid va
 input[type=number]{width:70px}input[type=checkbox]{width:20px;height:20px;accent-color:var(--gold)}
 button{font:600 15px Barlow,sans-serif;padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:var(--abyss);color:var(--foam);cursor:pointer}
 button.go{background:var(--gold);color:#1a1300;border-color:var(--gold)}
+a{color:var(--gold)}
 button.x{color:#ff8a8a}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .row>b,.row>.g{flex:1;min-width:110px}
@@ -42,7 +43,17 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const K="sharkscup-admin";
 const store={get(){try{return JSON.parse(localStorage.getItem(K)||"{}")}catch(e){return{}}},set(v){try{localStorage.setItem(K,JSON.stringify(v))}catch(e){}}};
 const cfg=Object.assign({owner:"",repo:"",branch:"main",path:"data.json",token:""},store.get());
-const S={players:[],live:false,stage:{type:"auto",format:"single_elim",players:"paid",seed:"sharks-cup",shuffle:true,groups:2,advance:2,legs:1,thirdPlace:false,rounds:0,results:[]}};
+const GAMES=window.CUP.games||["eFootball","FC Mobile"];
+const mk=g=>({live:false,stage:{type:"auto",name:g,game:g,format:"single_elim",players:"paid",seed:"sharks-cup",shuffle:true,groups:2,advance:2,legs:1,thirdPlace:false,rounds:0,results:[]}});
+const S={players:[],game:GAMES[0],setups:Object.fromEntries(GAMES.map(g=>[g,mk(g)]))};
+const cur=()=>S.setups[S.game];
+const payload=()=>JSON.stringify({players:S.players,stages:GAMES.filter(g=>S.setups[g].live).map(g=>S.setups[g].stage)},null,2);
+// Phone numbers stay private: kept only in this browser, never written to the public data file.
+const contacts={get(){try{return JSON.parse(localStorage.getItem("sharkscup-contacts")||"{}")}catch(e){return{}}},set(k,v){const c=this.get();c[k]=v;try{localStorage.setItem("sharkscup-contacts",JSON.stringify(c))}catch(e){}}};
+const contactHtml=p=>{const n=contacts.get()[p.game+"|"+p.name];return n?`<br><a href="https://wa.me/${esc(n.replace(/\D/g,""))}" target="_blank" rel="noopener">${esc(n)}</a>`:""};
+function addPlayer(n,g,ph){
+  if(S.players.some(p=>p.name.toLowerCase()===n.toLowerCase()&&p.game===g)){msg(n+" is already registered for "+g+".",1);return false}
+  S.players.push({name:n,game:g,paid:false});if(ph)contacts.set(g+"|"+n,ph);return true}
 let sha=null;
 const msg=(t,bad)=>{const m=$("#msg");m.textContent=t;m.className=bad?"bad":""};
 const enc=s=>btoa(unescape(encodeURIComponent(s))),dec=s=>decodeURIComponent(escape(atob(s.replace(/\s/g,""))));
@@ -56,13 +67,13 @@ async function load(){
     if(r.status===404){sha=null;msg("No data file yet. It will be created when you publish.");return}
     if(!r.ok){msg("GitHub replied "+r.status+". Check the username, repository, branch and token.",1);return}
     const j=await r.json(),D=JSON.parse(dec(j.content));sha=j.sha;
-    S.players=D.players||[];const g=(D.stages||[])[0];if(g){S.stage=Object.assign(S.stage,g);S.live=true}
+    S.players=D.players||[];(D.stages||[]).forEach(g=>{const c=S.setups[g.game];if(c){c.stage=Object.assign(c.stage,g);c.live=true}});
     msg("Loaded "+S.players.length+" players.");render()}
   catch(e){msg("Could not load: "+e.message,1)}}
 
 async function save(){
   const body={message:"Update Shark’s Cup",branch:cfg.branch,
-    content:enc(JSON.stringify({players:S.players,stages:S.live?[S.stage]:[]},null,2))};
+    content:enc(payload())};
   if(sha)body.sha=sha;
   try{const r=await gh("PUT",body);
     if(!r.ok){msg(r.status===409||r.status===422?"The file changed on GitHub. Press Load, then redo your last change.":"GitHub replied "+r.status+". Check that the token has Contents: Read and write.",1);return}
@@ -71,8 +82,8 @@ async function save(){
 
 function pending(){
   window.CUP.players=S.players;
-  const names=new Set(S.players.map(p=>p.name)),out=[];
-  expandAuto(S.stage).forEach(s=>{
+  const names=new Set(S.players.filter(p=>p.game===S.game).map(p=>p.name)),out=[];
+  expandAuto(cur().stage).forEach(s=>{
     const ko=s.type==="bracket",add=(m,l)=>{if(m.bye||!names.has(m.a)||!names.has(m.b)||Number.isFinite(m.sa))return;out.push({m,ko,l:s.name+(l?" · "+l:"")})};
     if(ko)s.sections.forEach(x=>x.rounds.forEach(r=>r.matches.forEach(m=>add(m,r.name))));
     else if(s.type==="groups")s.groups.forEach(g=>g.matches.forEach(m=>add(m,g.name+(m.round?" · "+m.round:""))));
@@ -80,7 +91,7 @@ function pending(){
   return out}
 
 function render(){
-  const g=S.stage,f=g.format,paid=S.players.filter(p=>p.paid).length,P=pending();
+  const g=cur().stage,f=g.format,paid=S.players.filter(p=>p.paid).length,P=pending();
   const fld=(k,l,t="text")=>`<label>${l}<input data-f="${k}" type="${t}" value="${esc(g[k])}"></label>`;
   $("#app").innerHTML=`
   <div class="card"><h2>1. GitHub connection</h2><div class="grid">
@@ -88,12 +99,15 @@ function render(){
   </div><p><button class="go" data-act="load">Load from GitHub</button></p></div>
 
   <div class="card"><h2>2. Players <span class="mute">(${paid} confirmed of ${S.players.length})</span></h2>
-    ${S.players.map((p,i)=>`<div class="row"><b>${esc(p.name)}</b>
+    ${S.players.map((p,i)=>`<div class="row"><b>${esc(p.name)} <span class="mute">· ${esc(p.game||"")}</span>${contactHtml(p)}</b>
       <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-p="${i}" ${p.paid?"checked":""}><span class="${p.paid?"ok":"mute"}">${p.paid?"Payment confirmed":"Awaiting payment"}</span></label>
       <button class="x" data-act="del" data-i="${i}">Remove</button></div>`).join("")||'<p class="mute">No players yet.</p>'}
-    <p><input id="np" placeholder="Add a username" maxlength="30"> <button data-act="add">Add player</button></p></div>
+    <p><select id="ng">${GAMES.map(x=>`<option>${esc(x)}</option>`).join("")}</select> <input id="np" placeholder="Username" maxlength="30"> <input id="nph" placeholder="WhatsApp (optional)"> <button data-act="add">Add player</button></p>
+    <p class="mute" style="margin-bottom:6px">Or paste a registration message you received on WhatsApp:</p>
+    <textarea id="pm" rows="4" style="width:100%;font:inherit;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--abyss);color:var(--foam)" placeholder="Shark’s Cup registration&#10;Game: FC Mobile&#10;Username: ..."></textarea>
+    <p><button data-act="paste">Add from message</button></p></div>
 
-  <div class="card"><h2>3. Tournament setup</h2><div class="grid">
+  <div class="card"><h2>3. Tournament setup</h2><p>Setting up: <select data-g="1">${GAMES.map(x=>`<option ${x===S.game?"selected":""}>${esc(x)}</option>`).join("")}</select> <span class="mute">Each game has its own draw and results.</span></p><div class="grid">
     <label>Format<select data-f="format">${[["single_elim","Single elimination"],["double_elim","Double elimination"],["round_robin","Round robin (league)"],["swiss","Swiss"],["groups_knockout","Groups + knockout"]].map(o=>`<option value="${o[0]}" ${f===o[0]?"selected":""}>${o[1]}</option>`).join("")}</select></label>
     <label>Who plays<select data-f="players"><option value="paid" ${g.players==="paid"?"selected":""}>Confirmed players only</option><option value="all" ${g.players==="all"?"selected":""}>All players</option></select></label>
     ${fld("seed","Draw seed (change it to redraw)")}
@@ -103,10 +117,10 @@ function render(){
     ${f==="swiss"?fld("rounds","Rounds (0 = automatic)","number"):""}
     ${f==="single_elim"||f==="groups_knockout"?`<label>Third-place match<select data-f="thirdPlace"><option value="false" ${!g.thirdPlace?"selected":""}>No</option><option value="true" ${g.thirdPlace?"selected":""}>Yes</option></select></label>`:""}
   </div>
-  <p><label style="display:flex;gap:10px;align-items:center"><input type="checkbox" data-live ${S.live?"checked":""}> <span>Show the fixtures on the live site (make the draw public)</span></label></p>
+  <p><label style="display:flex;gap:10px;align-items:center"><input type="checkbox" data-live ${cur().live?"checked":""}> <span>Show the ${esc(S.game)} fixtures on the live site (make the draw public)</span></label></p>
   <p class="mute">Set this up before the first match. Changing the seed or players later redraws the fixtures.</p></div>
 
-  <div class="card"><h2>4. Enter results</h2>
+  <div class="card"><h2>4. Enter results (${esc(S.game)})</h2>
     ${P.map((x,i)=>`<div class="row" data-i="${i}"><span class="mute" style="flex-basis:100%">${esc(x.l)}</span><b>${esc(x.m.a)}</b>
       <input type="number" min="0" data-s="a"> <span>–</span> <input type="number" min="0" data-s="b"> <b>${esc(x.m.b)}</b>
       ${x.ko?`<select data-s="w"><option value="">Winner if drawn</option><option>${esc(x.m.a)}</option><option>${esc(x.m.b)}</option></select>`:""}
@@ -122,30 +136,34 @@ document.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;const a=b.dataset.act,i=+b.dataset.i;
   if(a==="load")load();
   else if(a==="save")save();
-  else if(a==="dl"){const l=document.createElement("a");l.href=URL.createObjectURL(new Blob([JSON.stringify({players:S.players,stages:S.live?[S.stage]:[]},null,2)],{type:"application/json"}));l.download="data.json";l.click()}
+  else if(a==="dl"){const l=document.createElement("a");l.href=URL.createObjectURL(new Blob([payload()],{type:"application/json"}));l.download="data.json";l.click()}
   else if(a==="add"){const n=$("#np").value.trim();
     if(n.length<2)return msg("Enter a username.",1);
-    if(S.players.some(p=>p.name.toLowerCase()===n.toLowerCase()))return msg("That username is already in the list.",1);
-    S.players.push({name:n,paid:false});render()}
+    if(addPlayer(n,$("#ng").value,$("#nph").value.trim()))render()}
+  else if(a==="paste"){const t=$("#pm").value,f=k=>((t.match(new RegExp(k+":\\s*(.+)","i"))||[])[1]||"").trim();
+    const gm=GAMES.find(x=>x.toLowerCase()===f("Game").toLowerCase()),n=f("Username");
+    if(!n||!gm)return msg("Could not read that message. Copy the whole registration message from WhatsApp.",1);
+    if(addPlayer(n,gm,f("My WhatsApp"))){msg("Added "+n+" ("+gm+"). Confirm payment when you receive it.");render()}}
   else if(a==="del"){if(confirm("Remove "+S.players[i].name+"?")){S.players.splice(i,1);render()}}
-  else if(a==="delres"){S.stage.results.splice(i,1);render()}
+  else if(a==="delres"){cur().stage.results.splice(i,1);render()}
   else if(a==="res"){const row=b.closest(".row"),m=pending()[i].m,q=k=>row.querySelector(`[data-s=${k}]`);
     const sa=q("a").value,sb=q("b").value;
     if(sa===""||sb==="")return msg("Enter both scores.",1);
     const r={a:m.a,b:m.b,sa:+sa,sb:+sb},w=q("w")&&q("w").value;
     if(+sa===+sb&&q("w")&&!w)return msg("Knockout match is level. Pick the winner.",1);
     if(w&&+sa===+sb)r.w=w;
-    S.stage.results.push(r);msg("Result saved. Press Publish when ready.");render()}});
+    cur().stage.results.push(r);msg("Result saved. Press Publish when ready.");render()}});
 
 document.addEventListener("change",e=>{
   const t=e.target,d=t.dataset;
   if(d.c){cfg[d.c]=t.value.trim();store.set(cfg)}
+  else if(d.g){S.game=t.value;render()}
   else if(d.p!==undefined){S.players[+d.p].paid=t.checked;render()}
-  else if(d.live!==undefined){S.live=t.checked;render()}
+  else if(d.live!==undefined){cur().live=t.checked;render()}
   else if(d.f){let v=t.value;
     if(["groups","advance","legs","rounds"].includes(d.f))v=+v;
     if(["shuffle","thirdPlace"].includes(d.f))v=v==="true";
-    S.stage[d.f]=v;render()}});
+    cur().stage[d.f]=v;render()}});
 render();
 </script>
 </body>
