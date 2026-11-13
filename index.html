@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shark’s Cup</title>
+<title>Shark’s Cup · FC Mobile Tournament</title>
 <link rel="icon" href="logo.jpg">
 <meta property="og:image" content="logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -69,6 +69,7 @@ tbody tr:first-child td:first-child{box-shadow:inset 3px 0 var(--gold)}
 td:last-child{font-weight:600;color:var(--gold)}
 .fx{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
 .fx h4{grid-column:1/-1;margin:8px 0 0;color:var(--gold);font-weight:600}
+.champ{font:800 34px "Barlow Condensed",Impact,sans-serif;font-style:italic;color:var(--gold);margin:0 0 10px}
 ol.rules{padding-left:22px;max-width:70ch}ol.rules li{margin-bottom:10px}
 footer{padding:36px 20px;text-align:center;color:var(--mute)}
 @media(max-width:760px){.hero .wrap,.two{grid-template-columns:1fr}.hero img{order:-1;max-width:300px}}
@@ -109,16 +110,19 @@ footer{padding:36px 20px;text-align:center;color:var(--mute)}
 <footer><span id="foot"></span></footer>
 
 <script src="config.js"></script>
+<script src="generator.js"></script>
 <script>
+(async()=>{
+try{const r=await fetch("data.json?t="+Date.now());if(r.ok){const D=await r.json();if(Array.isArray(D.players))window.CUP.players=D.players;if(Array.isArray(D.stages))window.CUP.stages=D.stages}}catch(e){}
 const C=window.CUP,$=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const num=Number.isFinite,done=m=>num(m.sa)&&num(m.sb);
+const BYE_NAME="Bye",num=Number.isFinite,done=m=>num(m.sa)&&num(m.sb);
 const wa=C.whatsapp.replace(/\D/g,"");
 
 /* Header, facts, nav */
-document.title=C.name+" · "+C.tagline;
+document.title=C.name+" · "+(C.tournamentType||C.tagline);
 $("#title").innerHTML=esc(C.name).replace(/(\S+)$/,"<span>$1</span>");
-$("#tag").textContent=C.tagline;
+$("#tag").textContent=(C.tournamentType?C.tournamentType+" · ":"")+C.tagline;
 $("#facts").innerHTML=[["Game",C.game],["When",C.date],["Where",C.venue],["Entry",C.entryFee],["Prize",C.prize]]
   .filter(f=>f[1]).map(f=>`<div><b>${esc(f[1])}</b><small>${f[0]}</small></div>`).join("");
 $("#nav").innerHTML='<img src="logo.jpg" alt="">'+[["register","Register"],["players","Players"],["bracket","Fixtures"],["rules","Rules"]]
@@ -142,7 +146,7 @@ $("#form").addEventListener("submit",e=>{
   if(p.replace(/\D/g,"").length<7){err.textContent="Enter a valid WhatsApp number.";return}
   if(C.players.some(x=>x.name.toLowerCase()===u.toLowerCase())){err.textContent="That username is already registered. Pick another.";return}
   err.textContent="";
-  const msg=`${C.name} registration\nUsername: ${u}\nMy WhatsApp: ${p}\nEntry fee: ${C.entryFee}\nI am sending my payment now.`;
+  const msg=`${C.name} registration (${C.tournamentType||C.game})\nUsername: ${u}\nMy WhatsApp: ${p}\nEntry fee: ${C.entryFee}\nI am sending my payment now.`;
   window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`,"_blank","noopener");
 });
 
@@ -153,7 +157,7 @@ const card=m=>{const d=done(m),A=d&&m.sa>m.sb,B=d&&m.sb>m.sa;
 function standings(ms,players=[]){
   const t={},g=n=>t[n]||(t[n]={n,p:0,w:0,d:0,l:0,gf:0,ga:0});
   players.forEach(g);
-  ms.forEach(m=>{if(!m.a||!m.b)return;const A=g(m.a),B=g(m.b);if(!done(m))return;
+  ms.forEach(m=>{if(m.bye&&m.a&&m.b===BYE_NAME){const A=g(m.a);A.p++;A.w++;return}if(!m.a||!m.b)return;const A=g(m.a),B=g(m.b);if(!done(m))return;
     A.p++;B.p++;A.gf+=m.sa;A.ga+=m.sb;B.gf+=m.sb;B.ga+=m.sa;
     if(m.sa>m.sb){A.w++;B.l++}else if(m.sb>m.sa){B.w++;A.l++}else{A.d++;B.d++}});
   const P=C.points||{},rows=Object.values(t).map(x=>({...x,gd:x.gf-x.ga,pts:x.w*(P.win??3)+x.d*(P.draw??1)+x.l*(P.loss??0)}))
@@ -180,9 +184,11 @@ function render(s){
   }else{
     h=league(s.matches||[],s.players);
   }
+  if(s.champion)h=`<p class="champ">Champion: ${esc(s.champion)}</p>`+h;
   $("#stage").innerHTML=`<div class="stage">${h}</div>`;
 }
 
+C.stages=(C.stages||[]).flatMap(s=>s.type==="auto"?expandAuto(s):[s]);
 const tabs=$("#tabs");
 if(!C.stages||!C.stages.length){$("#stage").innerHTML='<p class="note">Fixtures will appear here once the draw is made.</p>'}
 else{
@@ -191,6 +197,7 @@ else{
     tabs.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));render(C.stages[b.dataset.i])});
   render(C.stages[0]);
 }
+})();
 </script>
 </body>
 </html>
