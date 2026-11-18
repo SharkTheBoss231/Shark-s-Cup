@@ -1,5 +1,11 @@
 {
-  "players": [],
+  "players": [
+    {
+      "name": "Joshua",
+      "game": "FC Mobile",
+      "paid": true
+    }
+  ],
   "stages": [
     {
       "type": "auto",
