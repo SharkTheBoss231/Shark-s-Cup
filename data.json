@@ -1,4 +1,20 @@
 {
   "players": [],
-  "stages": []
+  "stages": [
+    {
+      "type": "auto",
+      "name": "FC Mobile",
+      "game": "FC Mobile",
+      "format": "single_elim",
+      "players": "paid",
+      "seed": "sharks-cup",
+      "shuffle": true,
+      "groups": 2,
+      "advance": 2,
+      "legs": 1,
+      "thirdPlace": false,
+      "rounds": 0,
+      "results": []
+    }
+  ]
 }
